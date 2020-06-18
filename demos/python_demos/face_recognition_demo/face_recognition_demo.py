@@ -17,6 +17,7 @@
 
 import logging as log
 import os.path as osp
+import os
 import sys
 import time
 from argparse import ArgumentParser
@@ -30,6 +31,13 @@ from landmarks_detector import LandmarksDetector
 from face_detector import FaceDetector
 from faces_database import FacesDatabase
 from face_identifier import FaceIdentifier
+
+from statsd import StatsClient
+statsd_hostname = os.environ['HOSTNAME']
+statsd_project = 'dlrs'
+statsd_workload = 'face_recognition_demo'
+statsd_server = os.getenv('STATSD_SERVER', '172.17.0.1')
+statsd = StatsClient(statsd_server, 8125)
 
 DEVICE_KINDS = ['CPU', 'GPU', 'FPGA', 'MYRIAD', 'HETERO', 'HDDL']
 MATCH_ALGO = ['HUNGARIAN', 'MIN_DIST']
@@ -371,7 +379,11 @@ class Visualizer:
                     break
 
             self.update_fps()
-            self.frame_num += 1
+            metric_name = "{},hostname={},project={},workload={}".format('fps', statsd_hostname, statsd_project, statsd_workload)
+            statsd.gauge(metric_name, self.fps)
+            self.frame_num = self.frame_num + 1
+            metric_name = "{},hostname={},project={},workload={}".format('frame', statsd_hostname, statsd_project, statsd_workload)
+            statsd.gauge(metric_name, self.frame_num)
 
     @staticmethod
     def center_crop(frame, crop_size):
@@ -441,6 +453,10 @@ def main():
     visualizer = Visualizer(args)
     visualizer.run(args)
 
+    metric_name = "{},hostname={},project={},workload={}".format('fps', statsd_hostname, statsd_project, statsd_workload)
+    statsd.gauge(metric_name, 0)
+    metric_name = "{},hostname={},project={},workload={}".format('frame', statsd_hostname, statsd_project, statsd_workload)
+    statsd.gauge(metric_name, 0)
 
 if __name__ == '__main__':
     main()

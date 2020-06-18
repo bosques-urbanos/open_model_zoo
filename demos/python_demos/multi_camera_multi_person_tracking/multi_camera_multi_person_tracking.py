@@ -31,6 +31,13 @@ from utils.video import MulticamCapture, NormalizerCLAHE
 from utils.visualization import visualize_multicam_detections, get_target_size
 from openvino.inference_engine import IECore  # pylint: disable=import-error,E0611
 
+from statsd import StatsClient
+statsd_hostname = os.environ['HOSTNAME']
+statsd_project = 'dlrs'
+statsd_workload = 'multi_camera_tracking'
+statsd_server = os.getenv('STATSD_SERVER', '172.17.0.1')
+statsd = StatsClient(statsd_server, 8125)
+
 set_log_config()
 
 
@@ -165,6 +172,13 @@ def run(params, config, capture, detector, reid):
 
         print('\rProcessing frame: {}, fps = {} (avg_fps = {:.3})'.format(
                             frame_number, fps, 1. / avg_latency.get()), end="")
+
+        metric_name = "{},hostname={},project={},workload={}".format('frame', statsd_hostname, statsd_project, statsd_workload)
+        statsd.gauge(metric_name, frame_number)
+        metric_name = "{},hostname={},project={},workload={}".format('fps', statsd_hostname, statsd_project, statsd_workload)
+        statsd.gauge(metric_name, fps)
+
+
         prev_frames, frames = frames, prev_frames
     print('')
 
@@ -255,6 +269,10 @@ def main():
     run(args, config, capture, person_detector, person_recognizer)
     log.info('Demo finished successfully')
 
+    metric_name = "{},hostname={},project={},workload={}".format('frame', statsd_hostname, statsd_project, statsd_workload)
+    statsd.gauge(metric_name, 0)
+    metric_name = "{},hostname={},project={},workload={}".format('fps', statsd_hostname, statsd_project, statsd_workload)
+    statsd.gauge(metric_name, 0)
 
 if __name__ == '__main__':
     main()
